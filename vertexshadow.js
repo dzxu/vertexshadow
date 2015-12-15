@@ -1,4 +1,4 @@
-// David Xu, 89-267-0697, dxu9@lsu.edu
+// David Xu, dxu9@lsu.edu
 // Renders a textured chest that the user can tumble with sliders that
 // the user can use to set the light position
 // as well as one of two potential simple shadow implementations
@@ -161,11 +161,21 @@ function init() {
 //Mouse user interaction; drag in canvas to rotate view
 function onmousedown(event){
 	dragging = true;
-	lastClientX	= event.clientX;
+	lastClientX = event.clientX;
+	lastClientY = event.clientY;
+}
+
+function ontouchstart(event){
+	dragging = true;
+	lastClientX = event.clientX;
 	lastClientY = event.clientY;
 }
 
 function onmouseup(event){
+	dragging = false;
+}
+
+function ontouchend(event){
 	dragging = false;
 }
 
@@ -188,6 +198,24 @@ function onmousemove(event){
 	}
 }
 
+function ontouchmove(event) {
+	if(dragging){
+
+		dX = event.clientX - lastClientX;
+		dY = event.clientY - lastClientY;
+		modelRotationY = modelRotationY+dX;
+		modelRotationX = modelRotationX+dY;
+		if (modelRotationX>90.0){
+			modelRotationX = 90.0;
+		}
+		if (modelRotationX<-90.0){
+			modelRotationX=-90.0;
+		}
+		requestAnimationFrame(draw);
+		lastClientX=event.clientX;
+		lastClientY=event.clientY;
+	}
+}
 //Clear canvas, perform model-view-projection transformations, setup shaders, update lightPosition uniform,
 //call model draw with selected shaders
 function draw(){
