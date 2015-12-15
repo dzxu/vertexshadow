@@ -1,0 +1,195 @@
+<html>
+<!-- David Xu, 89-267-0697, dxu9@lsu.edu
+Renders a textured chest and its shadow that the user can tumble with sliders that 
+the user can use to set the light position. Parts of the document are written as exported images
+from an online LaTeX editor -->
+<head>
+	<meta charset="UTF-8">
+	<script type="text/javascript" src="webgl-utils.js"></script>
+	<script type="text/javascript" src="webgl-debug.js"></script>
+	<script type="text/javascript" src="cuon-utils.js"></script>
+	<script type="text/javascript" src="cuon-matrix.js"></script>
+	<script type="text/javascript" src="chest.js"></script>
+	<script type="text/javascript" src="vertexshadow.js"></script>
+	<title>Project 7 - Final</title>
+	<style>
+	</style>
+</head>	
+<body onload="init()">
+	<script id="textureVertexShader" type="x-shader/x-vertex">
+	precision mediump float;
+
+	uniform mat4 projectionMatrix;
+	uniform mat4 viewMatrix;
+	uniform mat4 modelMatrix;
+	uniform vec4 lightPosition;
+
+	attribute vec4 vertexPosition;
+	attribute vec3 vertexNormal;
+	attribute vec2 vertexTexCoord;
+
+	varying vec2 fragmentTexCoord;
+	varying vec3 fragmentNormal;
+	varying vec3 fragmentView;
+	varying vec3 fragmentLight;
+
+	void main() {
+		mat4 modelViewMatrix = viewMatrix*modelMatrix;
+		vec3 p = vec3(modelViewMatrix*vertexPosition);
+		vec3 q = vec3(viewMatrix*lightPosition);
+		fragmentNormal = normalize(mat3(modelViewMatrix)*vertexNormal);
+		fragmentLight = normalize(vec3(q-p));
+		fragmentView = normalize(vec3(-p));
+
+		fragmentTexCoord = vertexTexCoord;
+		gl_Position = projectionMatrix*viewMatrix*modelMatrix*vertexPosition;
+	}
+	</script>
+
+	<script id="textureFragmentShader" type="x-shader/x-fragment">
+	precision mediump float;
+
+	varying vec2 fragmentTexCoord;
+	varying vec3 fragmentNormal;
+	varying vec3 fragmentLight;
+	varying vec3 fragmentView;
+
+	uniform sampler2D modelTexture;
+
+	const vec3 lightColor = vec3(1.0, 1.0, 1.0);
+
+	void main() {
+		vec3 N = normalize(fragmentNormal);
+		vec3 L = normalize(fragmentLight);
+		vec3 V = normalize(fragmentView);
+		vec3 H = reflect(-L, N);
+
+		float kd = max(dot(L, N), 0.0);
+		float ks = pow(max(dot(H, N), 0.0),50.0);
+		
+		vec4 modelColor = texture2D(modelTexture, fragmentTexCoord);
+		gl_FragColor = vec4(modelColor.rgb*lightColor*kd+lightColor*ks, modelColor.a);
+	}
+	</script>
+
+	<script id="diffuseShadowVertexShader" type="x-shader/x-vertex">
+	precision mediump float;
+
+	uniform mat4 projectionMatrix;
+	uniform mat4 viewMatrix;
+	uniform mat4 modelMatrix;
+
+	uniform vec4 lightPosition;
+
+	attribute vec4 vertexPosition;
+	attribute vec3 vertexNormal;
+
+
+	void main() {
+		vec3 p = vec3(viewMatrix*modelMatrix*vertexPosition);
+		vec3 q = vec3(viewMatrix*lightPosition);
+		vec3 fragmentNormal = normalize(mat3(viewMatrix*modelMatrix)*vertexNormal);
+		vec3 fragmentLight = normalize(vec3(q-p));
+
+		vec4 v = modelMatrix*vertexPosition;
+		vec4 l = lightPosition-v;
+
+		vec3 N = normalize(fragmentNormal);
+		vec3 L = normalize(fragmentLight);
+
+		float kd = max(dot(L, N), 0.0);
+		if(kd>0.0) {
+
+			float t = v.y / l.y;
+
+			vec4 shadowVertexPosition;
+
+			shadowVertexPosition = v - t*l;
+			gl_Position = projectionMatrix*viewMatrix*shadowVertexPosition;
+		}
+	}
+	</script>
+
+	<script id="diffuseShadowFragmentShader" type="x-shader/x-fragment">
+	precision mediump float;
+
+	void main() {
+		gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+	}
+	</script>
+
+	<script id="totalShadowVertexShader" type="x-shader/x-vertex">
+	precision mediump float;
+
+	uniform mat4 projectionMatrix;
+	uniform mat4 viewMatrix;
+	uniform mat4 modelMatrix;
+	uniform vec4 lightPosition;
+
+	attribute vec4 vertexPosition;
+
+	void main() {
+		vec4 v = modelMatrix*vertexPosition;
+		vec4 l = normalize(lightPosition-v);
+
+		float t = v.y / l.y;
+
+		vec4 shadowVertexPosition;
+
+		shadowVertexPosition = v - t*l;
+
+		gl_Position = projectionMatrix*viewMatrix*shadowVertexPosition;
+	}
+	</script>
+
+	<script id="totalShadowFragmentShader" type="x-shader/x-fragment">
+	precision mediump float;
+
+	void main() {
+		gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+	}
+	</script>
+
+	<h1>Project 7</h1>
+	<p>This is a chest and its shadow. Clicking and dragging rotates the view. Details and discussion below</p>
+	<canvas id="webgl" width="500px" height="500px" background="White">
+		This content requires <a href="http://get.webgl.org/">WebGL</a>
+	</canvas>
+	<form>
+		<label>Shadow Shading</label>
+		<br>
+		<input type="radio" name="ppeffect" value="Total" checked onclick="radio0()">All Fragments
+		<br>
+		<input type="radio" name="ppeffect" value="Diffuse" onclick="radio1()">Only diffusely lit Fragments
+		<br>
+		<label>Light X Position</label>
+		<input id="xInput" type="range" min="-5.0" max="5.0" step="0.1" value="0.0" onInput="sliderX()">
+		<span id= "xOutput">0.0</span>
+		<br>
+		<label>Light Y Position</label>
+		<input id="yInput" type="range" min="0.0" max="10.0" step="0.1" value="3.0" onInput="sliderY()">
+		<span id= "yOutput">3.0</span>
+		<br>
+		<label>Light Z Position</label>
+		<input id="zInput" type="range" min="-10.0" max="10.0" step="0.1" value="3.0" onInput="sliderZ()">
+		<span id= "zOutput">3.0</span>
+	</form>
+	<h2>Program Details</h2>
+	<p>The goal of this project was to create a very simple shadow implementation in line with the kind of projects done throughout the semester. The initial design was to extend the vectors from fragments lit by a point light source to that light source in the opposite direction towards the flat x-z plane. This is done in world space as these shadows are not affected by the point of view. This calculation was performed as follows:</p>
+	<p>The vector V is defined as the position of the object vertex in world space, and the unit vector L from the fragment to the light source is calculated by subtracting V from the light position:</p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+	<a href="https://www.codecogs.com/eqnedit.php?latex=V=modelMatrix*vertexPosition\hfill\break\indent&space;L&space;=&space;normalize(lightPosition&space;-&space;modelMatrix*vertexPosition)" target="_blank"><img src="https://latex.codecogs.com/gif.latex?V=modelMatrix*vertexPosition\hfill\break\indent&space;L&space;=&space;normalize(lightPosition&space;-&space;modelMatrix*vertexPosition)" title="V=modelMatrix*vertexPosition\hfill\break\indent L = normalize(lightPosition - modelMatrix*vertexPosition)" /></a>
+	<p>Since, we are projecting the fragments onto the x-z plane, it's simple algebra to calculate a parameter to find the position of the projected vertices. Knowing that the y-component of the shadow's vertex will be 0, we can use the vector opposite of our unit vector L in this simple parametric equation:</p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+	<a href="https://www.codecogs.com/eqnedit.php?latex=V_y&space;-&space;tL_y&space;=&space;0" target="_blank"><img src="https://latex.codecogs.com/gif.latex?V_y&space;-&space;tL_y&space;=&space;0" title="V_y - tL_y = 0" /></a>
+	<p>Solving for <i>t</i> yields:</p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+	<a href="https://www.codecogs.com/eqnedit.php?latex=t&space;=&space;\frac{V_y}{L_y}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?t&space;=&space;\frac{V_y}{L_y}" title="t = \frac{V_y}{L_y}" /></a>
+	<p>with which we can calculate the position vector, S, of the shadow vertex as:</p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+	<a href="https://www.codecogs.com/eqnedit.php?latex=S&space;=&space;V&space;-&space;tL" target="_blank"><img src="https://latex.codecogs.com/gif.latex?S&space;=&space;V&space;-&space;tL" title="S = V - tL" /></a>
+	<p>After setting the position of the shadow vertices as clip coordinates with <b><i>gl_position = projectionMatrix*viewMatrix*shadowVertexPosition</i></b>, we test whether the fragment is lit, or facing the light source, with the same evaluation we use to find our diffuse lighting coefficient:</p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+	<a href="https://www.codecogs.com/eqnedit.php?latex=fragmentNormal&space;=&space;normalize(mat3(viewMatrix*modelMatrix)*vertexNormal)\\\indent&space;k_d&space;=&space;L\cdot&space;normalize(fragmentNormal)" target="_blank"><img src="https://latex.codecogs.com/gif.latex?fragmentNormal&space;=&space;normalize(mat3(viewMatrix*modelMatrix)*vertexNormal)\\\indent&space;k_d&space;=&space;L\cdot&space;normalize(fragmentNormal)" title="fragmentNormal = normalize(mat3(viewMatrix*modelMatrix)*vertexNormal)\\\indent k_d = L\cdot normalize(fragmentNormal)" /></a>
+	<p> If this dot product is positive, then the fragment is lit and we consider it as part of the shadow object (casting a shadow)... You can see the result of this by selecting <b>"Only diffusely lit fragments."</b> The shadow is absent in places where it should be present. There are also unexpected results when the point light source is within the object: pieces of the x-z plane are not in shadow (compare when the light source is at (0.0, 1.2, 0.0)). These obviously unintended behaviors are discussed below.</p>
+	<p> So, instead, we simply project and color all fragments of the object as the shadow and we achieve our intended effect of a simple shadow.</p>
+	<h2>Discussion</h2>
+	<p> This method is quite an easy way of rendering simple shadows, involving only a small amount of vector algebra. However, it is a rather inelegant solution extremely limited in its applications. Particularly, it can only render reasonable shadows cast by point light sources shining onto single solid objects against flat surfaces (this implementation, in particular, only renders shadows onto the x-z plane). Furthermore, this method is relatively expensive to scale as each object is drawn twice. Nevertheless, it seems to be a relatively applicable solution for this class considering the previous projects done during the semester i.e. with point light sources, no backgrounds, and mostly rendering single objects. </p>
+	<p> Originally, I planned to only use the vertices of the lit fragments to set the boundaries of the shadow and then coloring the outlined shape. This would have been a much less expensive operation. However, I was having difficulty devising a method to fill the shape with the color of the shadow by drawing triangles as we have always colored objects as there were not defined triangles in the flattened shadow shape. Taking the advice of Dr. Kooima, I simply drew the predefined triangles that are used in the object. However, this resulted in the issue seen with "Only diffusely lit fragments" selected. The computation failed to color certain fragments, especially along the surfaces that were just barely oblique, nearly parallel, to the vector from the vertex to the light source L. I suspect this is due to the calculation of fragment normals as an interpolation of vertex normals. If so, even drawing new triangles may have produced the same result, as the fragments would still not have been considered part of the shadow. It may also be due to how the triangles were defined in the object data, perhaps similar to the issues with the previous bunny model.</p>
+	</body>
+	</html>
